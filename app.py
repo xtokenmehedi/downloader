@@ -13,13 +13,14 @@ app = Flask(__name__)
 tasks = {}
 
 class Logger:
-    def __init__(self, tid): self.tid = tid
+    def __init__(self, tid): 
+        self.tid = tid
     def debug(self, msg): 
-        if tid in tasks: tasks[self.tid]['logs'].append(msg)
+        if self.tid in tasks: tasks[self.tid]['logs'].append(msg)
     def warning(self, msg): 
-        if tid in tasks: tasks[self.tid]['logs'].append(f"⚠️ {msg}")
+        if self.tid in tasks: tasks[self.tid]['logs'].append(f"⚠️ {msg}")
     def error(self, msg): 
-        if tid in tasks: tasks[self.tid]['logs'].append(f"❌ {msg}")
+        if self.tid in tasks: tasks[self.tid]['logs'].append(f"❌ {msg}")
 
 def progress_hook(d):
     tid = d.get('info_dict', {}).get('__tid')
@@ -47,37 +48,27 @@ def fetch_metadata(filepath, title):
     except: return False
 
 def worker(tid, data):
-    # --- Advanced Anti-Bot & Bypass Options ---
     opts = {
         'outtmpl': 'downloads/%(title)s.%(ext)s',
         'logger': Logger(tid),
         'progress_hooks': [progress_hook],
         'ratelimit': int(data.get('limit', 0)) * 1024 * 1024 if data.get('limit') else None,
         'proxy': data.get('proxy'),
-        'extractor_args': {'youtube': ['player_client=ios,android,web']}, # Mimics official apps
+        'extractor_args': {'youtube': ['player_client=ios,android,web']},
         'geo_bypass': True,
         'nocheckcertificate': True,
-        'quiet': False,
-        'no_warnings': False
+        'quiet': False
     }
     
     fmt = data.get('format', 'mp4')
     if fmt == 'mp3':
-        opts.update({
-            'format': 'bestaudio/best', 
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio', 
-                'preferredcodec': 'mp3', 
-                'preferredquality': '320'
-            }]
-        })
+        opts.update({'format': 'bestaudio/best', 'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '320'}]})
     
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
-            # Pass TID to hook via info_dict
             info = ydl.extract_info(data['url'], download=False)
             info['__tid'] = tid
-            ydl.process_info(info) # Start download with TID context
+            ydl.process_info(info)
             
             if fmt == 'mp3':
                 final_path = ydl.prepare_filename(info).rsplit('.', 1)[0] + '.mp3'
@@ -102,11 +93,10 @@ def start():
 def status(tid):
     if tid in tasks:
         current_logs = list(tasks[tid]['logs'])
-        tasks[tid]['logs'] = [] # Reset logs for polling
+        tasks[tid]['logs'] = []
         return jsonify({**tasks[tid], 'logs': current_logs})
     return jsonify({'error': 'Not Found'}), 404
 
 if __name__ == '__main__':
-    # Default to 5000 if PORT not set by Railway
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
