@@ -2,9 +2,9 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install FFmpeg and curl
+# Install FFmpeg, curl, and Node.js (Crucial for yt-dlp YouTube bypass)
 RUN apt-get update && \
-    apt-get install -y ffmpeg curl && \
+    apt-get install -y ffmpeg curl nodejs && \
     apt-get clean
 
 COPY requirements.txt .
@@ -14,7 +14,7 @@ COPY . .
 
 RUN mkdir -p downloads
 
-# Using dynamic $PORT provided by Railway
-# Reduced workers and threads to prevent Out Of Memory (OOM) crash on Free Tier
+EXPOSE 5000
+
 RUN pip install gunicorn
 CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 app:app
