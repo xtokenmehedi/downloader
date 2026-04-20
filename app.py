@@ -57,7 +57,10 @@ def worker(tid, data):
         'progress_hooks': [progress_hook],
         'ratelimit': int(data.get('limit', 0)) * 1024 * 1024 if data.get('limit') else None,
         'proxy': data.get('proxy'),
-        'extractor_args': {'youtube': ['player_client=ios,android,web']},
+        
+        # --- BYPASS & AUTHENTICATION ---
+        'username': 'oauth2', # OAuth2 Authentication (No cookies needed)
+        'extractor_args': {'youtube': {'player_client': ['ios', 'android', 'web']}},
         'geo_bypass': True,
         'nocheckcertificate': True,
     }
@@ -68,10 +71,11 @@ def worker(tid, data):
     
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
+            # Extract info with TID context
             info = ydl.extract_info(data['url'], download=True)
             filename = ydl.prepare_filename(info)
             
-            # ফাইলের আসল নাম খুঁজে বের করা (Merge এর পর এক্সটেনশন পাল্টাতে পারে)
+            # Find the actual final file (handling mergers)
             base_name = os.path.basename(filename).rsplit('.', 1)[0]
             for f in os.listdir(DOWNLOAD_FOLDER):
                 if f.startswith(base_name):
