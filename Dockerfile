@@ -2,7 +2,7 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install FFmpeg and essential tools
+# Install FFmpeg and curl
 RUN apt-get update && \
     apt-get install -y ffmpeg curl && \
     apt-get clean
@@ -14,8 +14,7 @@ COPY . .
 
 RUN mkdir -p downloads
 
-EXPOSE 5000
-
-# Using Gunicorn for production performance
+# Using dynamic $PORT provided by Railway
+# Reduced workers and threads to prevent Out Of Memory (OOM) crash on Free Tier
 RUN pip install gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--threads", "8", "--timeout", "0", "app.py:app"]
+CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 app:app
