@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 import yt_dlp
 import os
 import threading
@@ -11,6 +11,10 @@ app = Flask(__name__)
 
 # Global Task Storage
 tasks = {}
+DOWNLOAD_FOLDER = 'downloads'
+
+if not os.path.exists(DOWNLOAD_FOLDER):
+    os.makedirs(DOWNLOAD_FOLDER)
 
 class Logger:
     def __init__(self, tid): 
@@ -44,12 +48,11 @@ def fetch_metadata(filepath, title):
             audio.tags.add(TPE1(encoding=3, text=item['artistName']))
             audio.tags.add(APIC(encoding=3, mime='image/jpeg', type=3, desc='Cover', data=img))
             audio.save()
-            return True
-    except: return False
+    except: pass
 
 def worker(tid, data):
     opts = {
-        'outtmpl': 'downloads/%(title)s.%(ext)s',
+        'outtmpl': f'{DOWNLOAD_FOLDER}/%(title)s.%(ext)s',
         'logger': Logger(tid),
         'progress_hooks': [progress_hook],
         'ratelimit': int(data.get('limit', 0)) * 1024 * 1024 if data.get('limit') else None,
@@ -57,7 +60,6 @@ def worker(tid, data):
         'extractor_args': {'youtube': ['player_client=ios,android,web']},
         'geo_bypass': True,
         'nocheckcertificate': True,
-        'quiet': False
     }
     
     fmt = data.get('format', 'mp4')
@@ -66,13 +68,15 @@ def worker(tid, data):
     
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(data['url'], download=False)
-            info['__tid'] = tid
-            ydl.process_info(info)
+            info = ydl.extract_info(data['url'], download=True)
+            filename = ydl.prepare_filename(info)
             
-            if fmt == 'mp3':
-                final_path = ydl.prepare_filename(info).rsplit('.', 1)[0] + '.mp3'
-                fetch_metadata(final_path, info.get('title'))
+            # ফাইলের আসল নাম খুঁজে বের করা (Merge এর পর এক্সটেনশন পাল্টাতে পারে)
+            base_name = os.path.basename(filename).rsplit('.', 1)[0]
+            for f in os.listdir(DOWNLOAD_FOLDER):
+                if f.startswith(base_name):
+                    tasks[tid]['file'] = f
+                    break
         tasks[tid]['status'] = 'completed'
     except Exception as e:
         tasks[tid]['status'] = 'failed'
@@ -85,7 +89,7 @@ def home(): return render_template('index.html')
 def start():
     data = request.json
     tid = str(uuid.uuid4())[:8]
-    tasks[tid] = {'progress': '0%', 'speed': '0B/s', 'eta': '00:00', 'logs': [], 'status': 'active'}
+    tasks[tid] = {'progress': '0%', 'speed': '0B/s', 'eta': '00:00', 'logs': [], 'status': 'active', 'file': None}
     threading.Thread(target=worker, args=(tid, data)).start()
     return jsonify({'tid': tid})
 
@@ -96,6 +100,10 @@ def status(tid):
         tasks[tid]['logs'] = []
         return jsonify({**tasks[tid], 'logs': current_logs})
     return jsonify({'error': 'Not Found'}), 404
+
+@app.route('/api/files/<path:filename>')
+def download_file(filename):
+    return send_from_directory(DOWNLOAD_FOLDER, filename, as_attachment=True)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
