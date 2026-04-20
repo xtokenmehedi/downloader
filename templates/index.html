@@ -6,58 +6,64 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>tailwind.config = { darkMode: 'class' }</script>
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen p-4">
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-10">
     <div class="max-w-4xl mx-auto">
-        <header class="flex justify-between items-center py-6">
-            <h1 class="text-3xl font-black italic text-blue-600">PRO DL v2.0</h1>
-            <button onclick="document.documentElement.classList.toggle('dark')" class="p-2 bg-slate-200 dark:bg-slate-800 rounded-full">🌓</button>
+        <header class="flex justify-between items-center mb-8">
+            <h1 class="text-4xl font-black text-blue-500 tracking-tighter">MEHEDI PRO DL</h1>
+            <div class="text-xs text-slate-500 font-mono">SERVER STATUS: ONLINE</div>
         </header>
 
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-xl">
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-2xl mb-6">
             <div class="flex gap-3 mb-4">
-                <input type="text" id="url" placeholder="YouTube, TikTok, Instagram URL..." class="flex-1 p-4 rounded-xl bg-slate-100 dark:bg-slate-800 border-none outline-none focus:ring-2 focus:ring-blue-500">
-                <button onclick="navigator.clipboard.readText().then(t => document.getElementById('url').value = t)" class="px-4 bg-slate-200 dark:bg-slate-700 rounded-xl">Paste</button>
+                <input type="text" id="url" placeholder="Paste URL here..." class="flex-1 p-4 rounded-2xl bg-slate-800 border-none outline-none focus:ring-2 focus:ring-blue-500 transition">
             </div>
 
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <select id="format" class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800">
-                    <option value="mp4">Video (MP4)</option>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <select id="format" class="p-4 rounded-2xl bg-slate-800 border-none outline-none">
+                    <option value="mp4">Video (MP4/MKV)</option>
                     <option value="mp3">Audio (MP3 320k)</option>
                 </select>
-                <input type="number" id="limit" placeholder="Speed Limit (MB)" class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800">
-                <button id="dlBtn" onclick="startDL()" class="md:col-span-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition">Start Download</button>
+                <input type="number" id="limit" placeholder="Limit MB/s" class="p-4 rounded-2xl bg-slate-800 border-none outline-none">
+                <button id="dlBtn" onclick="startDL()" class="md:col-span-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-lg transition">Start Download</button>
             </div>
         </div>
 
-        <div id="downloadArea" class="hidden mt-4 text-center">
-            <a id="saveBtn" href="#" class="inline-block bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg animate-bounce">
+        <div id="saveSection" class="hidden text-center mb-8">
+            <a id="saveLink" href="#" class="inline-block bg-green-600 hover:bg-green-700 text-white px-10 py-4 rounded-2xl font-black text-xl shadow-2xl animate-bounce">
                 SAVE FILE TO DEVICE
             </a>
         </div>
 
-        <div class="mt-8 bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800">
-            <div class="flex justify-between items-center px-4 py-2 bg-slate-900 text-xs text-slate-400 font-mono">
-                <span>TERMINAL_OUTPUT</span>
-                <span id="stats">Ready</span>
+        <div class="bg-black rounded-3xl overflow-hidden border border-slate-800 shadow-2xl">
+            <div class="flex justify-between items-center px-6 py-3 bg-slate-900 text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+                <span>Console</span>
+                <span id="stats">0% | 0B/s</span>
             </div>
-            <div id="terminal" class="p-4 h-64 overflow-y-auto font-mono text-sm text-blue-400 leading-relaxed">
-                > Welcome, Mehedi Hasan Shanto. System initialized...
+            <div id="terminal" class="p-6 h-80 overflow-y-auto font-mono text-sm text-blue-400 space-y-2">
+                <div>> Authenticated as Mehedi Hasan Shanto.</div>
+                <div>> Ready for media extraction...</div>
             </div>
-            <div class="h-2 bg-slate-800">
+            <div class="h-1 bg-slate-800">
                 <div id="progress" class="h-full bg-blue-500 transition-all duration-500" style="width: 0%"></div>
             </div>
         </div>
     </div>
 
     <script>
-        let activeTask = null;
         let poll = null;
+        function log(msg) {
+            const term = document.getElementById('terminal');
+            const d = document.createElement('div');
+            d.innerHTML = `> ${msg}`;
+            term.appendChild(d);
+            term.scrollTop = term.scrollHeight;
+        }
 
         async function startDL() {
             const url = document.getElementById('url').value;
             if(!url) return;
-
-            document.getElementById('downloadArea').classList.add('hidden');
+            
+            document.getElementById('saveSection').classList.add('hidden');
             const btn = document.getElementById('dlBtn');
             btn.disabled = true;
             btn.innerText = "Processing...";
@@ -71,44 +77,32 @@
                     limit: document.getElementById('limit').value
                 })
             });
-            
-            const data = await res.json();
-            activeTask = data.tid;
-            log(`Job started. Task ID: ${activeTask}`);
-            
+            const { tid } = await res.json();
+            log(`Task initiated: ${tid}`);
+
             poll = setInterval(async () => {
-                const sRes = await fetch(`/api/status/${activeTask}`);
-                const sData = await sRes.json();
+                const sRes = await fetch(`/api/status/${tid}`);
+                const data = await sRes.json();
 
-                sData.logs.forEach(msg => log(msg));
-                document.getElementById('progress').style.width = sData.progress;
-                document.getElementById('stats').innerText = `Speed: ${sData.speed} | ETA: ${sData.eta}`;
+                data.logs.forEach(l => log(l));
+                document.getElementById('progress').style.width = data.progress;
+                document.getElementById('stats').innerText = `${data.progress} | ${data.speed} | ETA: ${data.eta}`;
 
-                if(sData.status === 'completed') {
+                if(data.status === 'completed') {
                     clearInterval(poll);
                     btn.disabled = false;
                     btn.innerText = "Start Download";
-                    log("SUCCESS: File ready for saving.");
-                    
-                    const saveBtn = document.getElementById('saveBtn');
-                    saveBtn.href = `/api/files/${encodeURIComponent(sData.file)}`;
-                    document.getElementById('downloadArea').classList.remove('hidden');
-                    window.location.href = saveBtn.href; // Auto trigger
-                } else if(sData.status === 'failed') {
+                    const link = document.getElementById('saveLink');
+                    link.href = `/api/files/${encodeURIComponent(data.file)}`;
+                    document.getElementById('saveSection').classList.remove('hidden');
+                    window.location.href = link.href;
+                } else if(data.status === 'failed') {
                     clearInterval(poll);
                     btn.disabled = false;
                     btn.innerText = "Start Download";
-                    log("ERROR: Download failed.");
+                    log("SYSTEM_ERROR: Download failed.");
                 }
-            }, 1000);
-        }
-
-        function log(msg) {
-            const term = document.getElementById('terminal');
-            const div = document.createElement('div');
-            div.textContent = `> ${msg}`;
-            term.appendChild(div);
-            term.scrollTop = term.scrollHeight;
+            }, 1500);
         }
     </script>
 </body>
