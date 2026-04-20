@@ -25,8 +25,14 @@
                     <option value="mp3">Audio (MP3 320k)</option>
                 </select>
                 <input type="number" id="limit" placeholder="Speed Limit (MB)" class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800">
-                <button onclick="startDL()" id="dlBtn" class="md:col-span-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition">Start Download</button>
+                <button id="dlBtn" onclick="startDL()" class="md:col-span-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition">Start Download</button>
             </div>
+        </div>
+
+        <div id="downloadArea" class="hidden mt-4 text-center">
+            <a id="saveBtn" href="#" class="inline-block bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg animate-bounce">
+                SAVE FILE TO DEVICE
+            </a>
         </div>
 
         <div class="mt-8 bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800">
@@ -42,6 +48,68 @@
             </div>
         </div>
     </div>
-    <script src="/static/js/main.js"></script>
+
+    <script>
+        let activeTask = null;
+        let poll = null;
+
+        async function startDL() {
+            const url = document.getElementById('url').value;
+            if(!url) return;
+
+            document.getElementById('downloadArea').classList.add('hidden');
+            const btn = document.getElementById('dlBtn');
+            btn.disabled = true;
+            btn.innerText = "Processing...";
+
+            const res = await fetch('/api/download', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    url: url,
+                    format: document.getElementById('format').value,
+                    limit: document.getElementById('limit').value
+                })
+            });
+            
+            const data = await res.json();
+            activeTask = data.tid;
+            log(`Job started. Task ID: ${activeTask}`);
+            
+            poll = setInterval(async () => {
+                const sRes = await fetch(`/api/status/${activeTask}`);
+                const sData = await sRes.json();
+
+                sData.logs.forEach(msg => log(msg));
+                document.getElementById('progress').style.width = sData.progress;
+                document.getElementById('stats').innerText = `Speed: ${sData.speed} | ETA: ${sData.eta}`;
+
+                if(sData.status === 'completed') {
+                    clearInterval(poll);
+                    btn.disabled = false;
+                    btn.innerText = "Start Download";
+                    log("SUCCESS: File ready for saving.");
+                    
+                    const saveBtn = document.getElementById('saveBtn');
+                    saveBtn.href = `/api/files/${encodeURIComponent(sData.file)}`;
+                    document.getElementById('downloadArea').classList.remove('hidden');
+                    window.location.href = saveBtn.href; // Auto trigger
+                } else if(sData.status === 'failed') {
+                    clearInterval(poll);
+                    btn.disabled = false;
+                    btn.innerText = "Start Download";
+                    log("ERROR: Download failed.");
+                }
+            }, 1000);
+        }
+
+        function log(msg) {
+            const term = document.getElementById('terminal');
+            const div = document.createElement('div');
+            div.textContent = `> ${msg}`;
+            term.appendChild(div);
+            term.scrollTop = term.scrollHeight;
+        }
+    </script>
 </body>
 </html>
